@@ -11,6 +11,38 @@ class BoxFTPSConnectorModule extends AbstractExternalModule
 {
     protected $logMessages = [];
 
+    public function redcap_every_page_top($project_id)
+    {
+        if (!$project_id) return;
+        if (PAGE !== 'ExternalModules/manager/project.php') return;
+
+        $log = $this->getProjectSetting('error_log', $project_id);
+        if (empty($log)) return;
+
+        // Extract just the first two lines (Run Time and status)
+        $lines = explode("\n", trim($log));
+        $runTime = $lines[0] ?? '';
+        $status  = $lines[1] ?? '';
+
+        $color = (strpos($status, 'ERRORS') !== false)
+            ? '#f8d7da'   // red tint
+            : '#d4edda';  // green tint
+        $border = (strpos($status, 'ERRORS') !== false)
+            ? '#f5c6cb'
+            : '#c3e6cb';
+        $text = (strpos($status, 'ERRORS') !== false)
+            ? '#721c24'
+            : '#155724';
+
+        echo '<div style="margin: 10px 20px; padding: 10px 15px; background-color: ' . $color . '; 
+                    border: 1px solid ' . $border . '; border-radius: 4px; color: ' . $text . ';
+                    font-family: Arial, sans-serif; font-size: 13px;">';
+        echo '<strong>Box FTPS Import</strong> &mdash; ';
+        echo htmlspecialchars($runTime) . ' &mdash; ';
+        echo '<strong>' . htmlspecialchars($status) . '</strong>';
+        echo '</div>';
+    }
+
    public function addLog($msg, $level = 'info')
    {
        $this->logMessages[] = [
@@ -142,7 +174,6 @@ function importmethod($cronAttributes) {
                             
                             $output = curl_exec($ch);
                             $curl_error = curl_error($ch);
-                            curl_close($ch);
 
                             if (!empty($curl_error)) {
                                 $this->addLog("ERROR: cURL error - $curl_error");

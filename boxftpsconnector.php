@@ -1,6 +1,9 @@
 <?php
 
+namespace BoxFTPSConnector\BoxImportScript;
+
 use ExternalModules\ExternalModules;
+use Exception;
 
 require_once ExternalModules::getProjectHeaderPath();
 
@@ -8,38 +11,6 @@ require_once ExternalModules::getProjectHeaderPath();
 class BoxFTPSConnector extends \ExternalModules\AbstractExternalModule
 {
     protected $logMessages = [];
-    
-  public function redcap_every_page_top($project_id)
-  {
-      if (!$project_id) return;
-      if (PAGE !== 'ExternalModules/manager/project.php') return;
-  
-      $log = $this->getProjectSetting('error_log', $project_id);
-      if (empty($log)) return;
-  
-      // Extract just the first two lines (Run Time and status)
-      $lines = explode("\n", trim($log));
-      $runTime = $lines[0] ?? '';
-      $status  = $lines[1] ?? '';
-  
-      $color = (strpos($status, 'ERRORS') !== false)
-          ? '#f8d7da'   // red tint
-          : '#d4edda';  // green tint
-      $border = (strpos($status, 'ERRORS') !== false)
-          ? '#f5c6cb'
-          : '#c3e6cb';
-      $text = (strpos($status, 'ERRORS') !== false)
-          ? '#721c24'
-          : '#155724';
-  
-      echo '<div style="margin: 10px 20px; padding: 10px 15px; background-color: ' . $color . '; 
-                  border: 1px solid ' . $border . '; border-radius: 4px; color: ' . $text . ';
-                  font-family: Arial, sans-serif; font-size: 13px;">';
-      echo '<strong>Box FTPS Import</strong> &mdash; ';
-      echo htmlspecialchars($runTime) . ' &mdash; ';
-      echo '<strong>' . htmlspecialchars($status) . '</strong>';
-      echo '</div>';
-}
 
    public function addLog($msg, $level = 'info')
    {
@@ -132,7 +103,6 @@ public function writeRunLog($project_id, $didRun = true)
 
             $this->addLog("Downloaded file: $remote");
 
-            curl_close($ch);
 
         } finally {
             fclose($fp);
@@ -181,11 +151,9 @@ public function writeRunLog($project_id, $didRun = true)
             if (curl_errno($ch)) {
                 $msg = "FTPS LIST ERROR: " . curl_error($ch);
                 $this->addLog($msg);
-                curl_close($ch);
                 throw new Exception($msg);
             }
     
-            curl_close($ch);
     
             // Parse the file listing
             if (empty($listing)) {
@@ -252,7 +220,7 @@ public function writeRunLog($project_id, $didRun = true)
            throw new Exception("Cannot open CSV file: $file");
        }
    
-       $headers = fgetcsv($fh);
+       $headers = fgetcsv($fh, 0, ",", "\"", "");
        if ($headers === false) {
            fclose($fh);
            throw new Exception("Cannot read headers from CSV file: $file");
@@ -277,7 +245,7 @@ public function writeRunLog($project_id, $didRun = true)
    
        $rows = [];
    
-       while ($line = fgetcsv($fh)) {
+       while ($line = fgetcsv($fh, 0, ",", "\"", "")) {
            $r=[];
            foreach ($idx as $i=>$t) {
                $r[$t]=$line[$i]??'';
@@ -318,11 +286,9 @@ public function uploadData($token, $data)
     if (curl_errno($ch)) {
         $msg = "cURL ERROR: " . $error;
         $this->addLog($msg, 'error');
-        curl_close($ch);
         throw new Exception($msg);
     }
 
-    curl_close($ch);
 
     $this->addLog("API Response: " . substr($out, 0, 500), 'detail');
 
@@ -368,7 +334,6 @@ public function uploadRepo($token, $file, $folder=null, $filename=null, $overwri
         $out = curl_exec($ch);
         $curlError = curl_error($ch);
         $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
 
         $this->addLog("List API HTTP code: $httpCode", 'detail');
         $this->addLog("List API raw response: " . substr($out, 0, 500), 'detail');
@@ -402,7 +367,6 @@ public function uploadRepo($token, $file, $folder=null, $filename=null, $overwri
                     ]);
 
                     $deleteOut = curl_exec($ch);
-                    curl_close($ch);
 
                     $this->addLog("Delete response: " . substr($deleteOut, 0, 200), 'detail');
                     break;
@@ -447,11 +411,9 @@ public function uploadRepo($token, $file, $folder=null, $filename=null, $overwri
         $error = curl_error($ch);
 
         if (curl_errno($ch)) {
-            curl_close($ch);
             throw new Exception("Repo upload error: " . $error);
         }
 
-        curl_close($ch);
 
         $this->addLog("File Repo API Response: " . substr($out, 0, 500), 'detail');
 
@@ -487,7 +449,6 @@ public function getRecordIdField($token)
     ]);
 
     $out = curl_exec($ch);
-    curl_close($ch);
 
     $fields = json_decode($out, true);
     if (empty($fields)) {
@@ -516,7 +477,6 @@ public function verifyRecord($token, $record_id, $id_field)
     ]);
 
     $out = curl_exec($ch);
-    curl_close($ch);
 
     $records = json_decode($out, true);
 
@@ -568,11 +528,9 @@ public function uploadToRecordField($token, $local, $record_id, $field, $event =
     $error = curl_error($ch);
 
     if (curl_errno($ch)) {
-        curl_close($ch);
         throw new Exception("File upload error: " . $error);
     }
 
-    curl_close($ch);
 
     $this->addLog("Record field API response: " . substr($out, 0, 500), 'detail');
 
@@ -634,11 +592,9 @@ public function archiveOnBox($remote, $archivePath, $site, $port, $user, $pass)
   
               if (curl_errno($ch)) {
                   $msg = "FTPS archive upload error: " . curl_error($ch);
-                  curl_close($ch);
                   throw new Exception($msg);
               }
   
-              curl_close($ch);
               $this->addLog("Archived file uploaded to: $archiveFile", 'detail');
   
           } finally {
@@ -675,577 +631,575 @@ public function archiveOnBox($remote, $archivePath, $site, $port, $user, $pass)
   
       if (curl_errno($ch)) {
           $msg = "FTPS delete error: " . curl_error($ch);
-          curl_close($ch);
           throw new Exception($msg);
       }
   
-      curl_close($ch);
       $this->addLog("Deleted from Box: $remote", 'detail');
 }
   
   
   
-} // <-- CLASS CLOSING BRACE
+    /**
+     * Runs a full import job for the given project.
+     * Called by boximp_now.php (no-auth, triggered by cron) and
+     * boximp_manual.php (authenticated, triggered by a REDCap user).
+     */
+    public function runImportJob($pid)
+    {
+        if (!$pid) {
+            exit("Missing PID");
+        }
 
+        $successMessages = [];
+        $fileCount = 0;
+        $recordCount = 0;
 
+    try {
 
-// Script execution starts here
+        $this->addLog("STARTING IMPORT");
 
-$module = new BoxFTPSConnector();
+        $settings = ExternalModules::getProjectSettingsAsArray(
+            $this->PREFIX,
+            $pid
+        );
 
-$pid = $_GET['pid'] ?? null;
+        // Extract scalar settings
+        $site     = $settings['site']['value']      ?? null;
+        $port     = $settings['port']['value']      ?? null;
+        $username = $settings['username']['value']  ?? null;
+        $password = $settings['password']['value']  ?? null;
+        $api_token = $settings['api_token']['value'] ?? null;
 
-if (!$pid) {
-    exit("Missing PID");
-}
+        $this->addLog("Site: $site, Port: $port, User: $username");
 
-$successMessages = [];
-$fileCount = 0;
-$recordCount = 0;
-
-try {
-
-    $module->addLog("STARTING IMPORT");
-
-    $settings = ExternalModules::getProjectSettingsAsArray(
-        $module->PREFIX,
-        $pid
-    );
-
-    // Extract scalar settings
-    $site     = $settings['site']['value']      ?? null;
-    $port     = $settings['port']['value']      ?? null;
-    $username = $settings['username']['value']  ?? null;
-    $password = $settings['password']['value']  ?? null;
-    $api_token = $settings['api_token']['value'] ?? null;
-
-    $module->addLog("Site: $site, Port: $port, User: $username");
-
-    $data_files = $settings['data_files']['value']       ?? null;
-    $field_map  = $settings['field_map']['value']        ?? '';
+        $data_files = $settings['data_files']['value']       ?? null;
+        $field_map  = $settings['field_map']['value']        ?? '';
   
 
-   $enable_data_import = !empty($settings['enable_data_import']['value']);
-   $enable_repo_upload = !empty($settings['enable_repo_upload']['value']);
-   $enable_upload_field = !empty($settings['enable_upload_field']['value']);
-   $enable_archive     = !empty($settings['enable_archive']['value']);
-   $enable_delete      = !empty($settings['enable_delete']['value']);
+       $enable_data_import = !empty($settings['enable_data_import']['value']);
+       $enable_repo_upload = !empty($settings['enable_repo_upload']['value']);
+       $enable_upload_field = !empty($settings['enable_upload_field']['value']);
+       $enable_archive     = !empty($settings['enable_archive']['value']);
+       $enable_delete      = !empty($settings['enable_delete']['value']);
    
    
-   $module->addLog("Enabled jobs - Data: " . ($enable_data_import ? 'YES' : 'NO') . 
-                   ", Repo: " . ($enable_repo_upload ? 'YES' : 'NO') .
-                   ", UploadField: " . ($enable_upload_field ? 'YES' : 'NO') .
-                   ", Archive: " . ($enable_archive ? 'YES' : 'NO') .
-                   ", Delete: " . ($enable_delete ? 'YES' : 'NO'), 'detail');
+       $this->addLog("Enabled jobs - Data: " . ($enable_data_import ? 'YES' : 'NO') . 
+                       ", Repo: " . ($enable_repo_upload ? 'YES' : 'NO') .
+                       ", UploadField: " . ($enable_upload_field ? 'YES' : 'NO') .
+                       ", Archive: " . ($enable_archive ? 'YES' : 'NO') .
+                       ", Delete: " . ($enable_delete ? 'YES' : 'NO'), 'detail');
                    
-  $module->addLog("DEBUG settings: " . json_encode([
-      'enable_data_import'  => $settings['enable_data_import']['value']  ?? 'NOT SET',
-      'enable_repo_upload'  => $settings['enable_repo_upload']['value']  ?? 'NOT SET',
-      'enable_upload_field' => $settings['enable_upload_field']['value'] ?? 'NOT SET',
-      'enable_archive'      => $settings['enable_archive']['value']      ?? 'NOT SET',
-      'enable_delete'       => $settings['enable_delete']['value']       ?? 'NOT SET'
-]), 'detail');
+      $this->addLog("DEBUG settings: " . json_encode([
+          'enable_data_import'  => $settings['enable_data_import']['value']  ?? 'NOT SET',
+          'enable_repo_upload'  => $settings['enable_repo_upload']['value']  ?? 'NOT SET',
+          'enable_upload_field' => $settings['enable_upload_field']['value'] ?? 'NOT SET',
+          'enable_archive'      => $settings['enable_archive']['value']      ?? 'NOT SET',
+          'enable_delete'       => $settings['enable_delete']['value']       ?? 'NOT SET'
+    ]), 'detail');
 
-$module->addLog("DEBUG flags: data=$enable_data_import, repo=$enable_repo_upload, field=$enable_upload_field, archive=$enable_archive, delete=$enable_delete", 'detail');
+    $this->addLog("DEBUG flags: data=$enable_data_import, repo=$enable_repo_upload, field=$enable_upload_field, archive=$enable_archive, delete=$enable_delete", 'detail');
    
-  if (!$enable_data_import && !$enable_repo_upload && !$enable_upload_field && !$enable_archive && !$enable_delete) {
-      $module->addLog("WARNING: No job types enabled - nothing to do", 'error');
-      throw new Exception("No job types enabled");
-}
+      if (!$enable_data_import && !$enable_repo_upload && !$enable_upload_field && !$enable_archive && !$enable_delete) {
+          $this->addLog("WARNING: No job types enabled - nothing to do", 'error');
+          throw new Exception("No job types enabled");
+    }
 
- // -------------------------------------------------------
-     // DATA IMPORT
      // -------------------------------------------------------
+         // DATA IMPORT
+         // -------------------------------------------------------
      
-    if ($enable_data_import) {
+        if ($enable_data_import) {
  
-         $data_files_list = $settings['data_files']['value']  ?? [];
-         $field_maps      = $settings['field_map']['value']   ?? [];
+             $data_files_list = $settings['data_files']['value']  ?? [];
+             $field_maps      = $settings['field_map']['value']   ?? [];
  
-         if (!is_array($data_files_list)) $data_files_list = [$data_files_list];
-         if (!is_array($field_maps))      $field_maps      = [$field_maps];
+             if (!is_array($data_files_list)) $data_files_list = [$data_files_list];
+             if (!is_array($field_maps))      $field_maps      = [$field_maps];
  
-         $module->addLog("Found " . count($data_files_list) . " data import job(s)", 'detail');
+             $this->addLog("Found " . count($data_files_list) . " data import job(s)", 'detail');
  
-         foreach ($data_files_list as $job_index => $data_files) {
-             if (empty($data_files)) {
-                 $module->addLog("Skipping data job $job_index - no files specified", 'error');
-                 continue;
-             }
+             foreach ($data_files_list as $job_index => $data_files) {
+                 if (empty($data_files)) {
+                     $this->addLog("Skipping data job $job_index - no files specified", 'error');
+                     continue;
+                 }
  
-             $field_map = $field_maps[$job_index] ?? '';
+                 $field_map = $field_maps[$job_index] ?? '';
  
-             $module->addLog("Data job $job_index: files='$data_files'", 'detail');
+                 $this->addLog("Data job $job_index: files='$data_files'", 'detail');
  
-             $hasWildcard = (strpos($data_files, '*') !== false || strpos($data_files, '?') !== false);
+                 $hasWildcard = (strpos($data_files, '*') !== false || strpos($data_files, '?') !== false);
  
-             if ($hasWildcard) {
-                 $pathParts = explode('/', $data_files);
-                 $pattern   = array_pop($pathParts);
-                 $directory = trim(implode('/', $pathParts), '/') ?: '/';
+                 if ($hasWildcard) {
+                     $pathParts = explode('/', $data_files);
+                     $pattern   = array_pop($pathParts);
+                     $directory = trim(implode('/', $pathParts), '/') ?: '/';
  
-                 $module->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
+                     $this->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
  
-                 try {
-                     $allFiles = $module->listFtpsDirectory($directory, $site, $port, $username, $password);
+                     try {
+                         $allFiles = $this->listFtpsDirectory($directory, $site, $port, $username, $password);
  
-                     $matchingFiles = [];
-                     foreach ($allFiles as $fname) {
-                         if ($module->matchesWildcard($fname, $pattern)) {
-                             $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                         $matchingFiles = [];
+                         foreach ($allFiles as $fname) {
+                             if ($this->matchesWildcard($fname, $pattern)) {
+                                 $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                             }
                          }
-                     }
  
-                     if (empty($matchingFiles)) {
-                         $module->addLog("WARNING: No data files matched pattern '$pattern'", 'error');
-                     }
+                         if (empty($matchingFiles)) {
+                             $this->addLog("WARNING: No data files matched pattern '$pattern'", 'error');
+                         }
  
-                 } catch (Exception $e) {
-                     $module->addLog("ERROR processing data wildcard: " . $e->getMessage(), 'error');
-                     $matchingFiles = [];
+                     } catch (Exception $e) {
+                         $this->addLog("ERROR processing data wildcard: " . $e->getMessage(), 'error');
+                         $matchingFiles = [];
+                     }
+                 } else {
+                     $matchingFiles = [$data_files];
                  }
-             } else {
-                 $matchingFiles = [$data_files];
-             }
  
-             foreach ($matchingFiles as $remoteFile) {
-                 $fname = basename($remoteFile);
-                 $module->addLog("Downloading data file: $fname", 'detail');
+                 foreach ($matchingFiles as $remoteFile) {
+                     $fname = basename($remoteFile);
+                     $this->addLog("Downloading data file: $fname", 'detail');
  
-                 try {
-                     $local = sys_get_temp_dir() . "/tmp_" . uniqid('ftps_', true) . "_" . $fname;
+                     try {
+                         $local = sys_get_temp_dir() . "/tmp_" . uniqid('ftps_', true) . "_" . $fname;
  
-                     $module->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
+                         $this->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
  
-                     if (!file_exists($local) || filesize($local) == 0) {
-                         $module->addLog("ERROR: File was not downloaded or is empty: $fname", 'error');
-                         continue;
+                         if (!file_exists($local) || filesize($local) == 0) {
+                             $this->addLog("ERROR: File was not downloaded or is empty: $fname", 'error');
+                             continue;
+                         }
+ 
+                         $this->addLog("File downloaded successfully. Size: " . filesize($local) . " bytes", 'detail');
+ 
+                         $data = $this->parseMapping($local, $field_map);
+ 
+                         $this->uploadData($api_token, $data);
+ 
+                         $recordCount += count($data);
+                         $successMessages[] = "Successfully imported " . count($data) . " records from $fname";
+                         $this->addLog("Imported " . count($data) . " records from $fname", 'summary');
+ 
+                     } catch (Exception $e) {
+                         $this->addLog("ERROR with data file $fname: " . $e->getMessage(), 'error');
+                     } finally {
+                         if (!empty($local) && file_exists($local)) unlink($local);
                      }
- 
-                     $module->addLog("File downloaded successfully. Size: " . filesize($local) . " bytes", 'detail');
- 
-                     $data = $module->parseMapping($local, $field_map);
- 
-                     $module->uploadData($api_token, $data);
- 
-                     $recordCount += count($data);
-                     $successMessages[] = "Successfully imported " . count($data) . " records from $fname";
-                     $module->addLog("Imported " . count($data) . " records from $fname", 'summary');
- 
-                 } catch (Exception $e) {
-                     $module->addLog("ERROR with data file $fname: " . $e->getMessage(), 'error');
-                 } finally {
-                     if (!empty($local) && file_exists($local)) unlink($local);
                  }
              }
-         }
-    }
+        }
 
+            // -------------------------------------------------------
+        // REPO IMPORT
         // -------------------------------------------------------
-    // REPO IMPORT
-    // -------------------------------------------------------
     
-    if ($enable_repo_upload) {
-        // Fields are parallel top-level arrays
-        $repo_files_list = $settings['repo_files']['value']    ?? [];
-        $repo_folder_ids = $settings['repo_folder_id']['value'] ?? [];
-        $overwrite_flags = $settings['overwrite_file']['value'] ?? [];
-        // Normalize to arrays in case only one job exists
-        if (!is_array($repo_files_list)) $repo_files_list = [$repo_files_list];
-        if (!is_array($repo_folder_ids)) $repo_folder_ids = [$repo_folder_ids];
-        if (!is_array($overwrite_flags)) $overwrite_flags  = [$overwrite_flags];
-        $module->addLog("Found " . count($repo_files_list) . " repo upload job(s)", 'detail');
-        foreach ($repo_files_list as $job_index => $repo_files) {
-            if (empty($repo_files)) {
-                $module->addLog("Skipping repo job $job_index - no files specified", 'error');
-                continue;
-            }
-            $repo_folder_id = $repo_folder_ids[$job_index] ?? null;
-            $overwrite      = in_array($overwrite_flags[$job_index] ?? null, ['true', true, '1', 1], true);
-            if (!is_numeric($repo_folder_id) || intval($repo_folder_id) <= 0) {
-	                   $module->addLog("ERROR: Invalid folder ID '$repo_folder_id' for repo job $job_index", 'error');
-	                   continue;
-            }
-            $module->addLog("Repo job $job_index: files='$repo_files', folder='$repo_folder_id', overwrite=" . ($overwrite ? 'YES' : 'NO'), 'detail');
-            $hasWildcard = (strpos($repo_files, '*') !== false || strpos($repo_files, '?') !== false);
-            if ($hasWildcard) {
-                $pathParts = explode('/', $repo_files);
-                $pattern   = array_pop($pathParts);
-                $directory = trim(implode('/', $pathParts), '/') ?: '/';
-                $module->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
-                try {
-                    $allFiles = $module->listFtpsDirectory($directory, $site, $port, $username, $password);
-                    $matchingFiles = [];
-                    foreach ($allFiles as $fname) {
-                        if ($module->matchesWildcard($fname, $pattern)) {
-                            $matchingFiles[] = trim($directory, '/') . '/' . $fname;
-                        }
-                    }
-                    if (empty($matchingFiles)) {
-                        $module->addLog("WARNING: No repo files matched pattern '$pattern'", 'error');
-                    }
-                } catch (Exception $e) {
-                    $module->addLog("ERROR processing repo wildcard: " . $e->getMessage(), 'error');
-                    $matchingFiles = [];
+        if ($enable_repo_upload) {
+            // Fields are parallel top-level arrays
+            $repo_files_list = $settings['repo_files']['value']    ?? [];
+            $repo_folder_ids = $settings['repo_folder_id']['value'] ?? [];
+            $overwrite_flags = $settings['overwrite_file']['value'] ?? [];
+            // Normalize to arrays in case only one job exists
+            if (!is_array($repo_files_list)) $repo_files_list = [$repo_files_list];
+            if (!is_array($repo_folder_ids)) $repo_folder_ids = [$repo_folder_ids];
+            if (!is_array($overwrite_flags)) $overwrite_flags  = [$overwrite_flags];
+            $this->addLog("Found " . count($repo_files_list) . " repo upload job(s)", 'detail');
+            foreach ($repo_files_list as $job_index => $repo_files) {
+                if (empty($repo_files)) {
+                    $this->addLog("Skipping repo job $job_index - no files specified", 'error');
+                    continue;
                 }
-            } else {
-                $matchingFiles = [$repo_files];
-            }
-            foreach ($matchingFiles as $remoteFile) {
-                $fname = basename($remoteFile);
-                $module->addLog("Downloading repo file: $fname", 'detail');
-                try {
-                    $tmpDir = sys_get_temp_dir() . "/ftps_" . uniqid('', true);
-		    mkdir($tmpDir, 0700, true);
-                    $local = $tmpDir . "/" . $fname;
+                $repo_folder_id = $repo_folder_ids[$job_index] ?? null;
+                $overwrite      = in_array($overwrite_flags[$job_index] ?? null, ['true', true, '1', 1], true);
+                if (!is_numeric($repo_folder_id) || intval($repo_folder_id) <= 0) {
+    	                   $this->addLog("ERROR: Invalid folder ID '$repo_folder_id' for repo job $job_index", 'error');
+    	                   continue;
+                }
+                $this->addLog("Repo job $job_index: files='$repo_files', folder='$repo_folder_id', overwrite=" . ($overwrite ? 'YES' : 'NO'), 'detail');
+                $hasWildcard = (strpos($repo_files, '*') !== false || strpos($repo_files, '?') !== false);
+                if ($hasWildcard) {
+                    $pathParts = explode('/', $repo_files);
+                    $pattern   = array_pop($pathParts);
+                    $directory = trim(implode('/', $pathParts), '/') ?: '/';
+                    $this->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
+                    try {
+                        $allFiles = $this->listFtpsDirectory($directory, $site, $port, $username, $password);
+                        $matchingFiles = [];
+                        foreach ($allFiles as $fname) {
+                            if ($this->matchesWildcard($fname, $pattern)) {
+                                $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                            }
+                        }
+                        if (empty($matchingFiles)) {
+                            $this->addLog("WARNING: No repo files matched pattern '$pattern'", 'error');
+                        }
+                    } catch (Exception $e) {
+                        $this->addLog("ERROR processing repo wildcard: " . $e->getMessage(), 'error');
+                        $matchingFiles = [];
+                    }
+                } else {
+                    $matchingFiles = [$repo_files];
+                }
+                foreach ($matchingFiles as $remoteFile) {
+                    $fname = basename($remoteFile);
+                    $this->addLog("Downloading repo file: $fname", 'detail');
+                    try {
+                        $tmpDir = sys_get_temp_dir() . "/ftps_" . uniqid('', true);
+    		    mkdir($tmpDir, 0700, true);
+                        $local = $tmpDir . "/" . $fname;
                     
-                    $module->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
-                    $module->uploadRepo($api_token, $local, $repo_folder_id, $fname, $overwrite);
-                    $fileCount++;
-                    $successMessages[] = "Successfully uploaded $fname to folder $repo_folder_id";
-                    $module->addLog("Uploaded $fname to folder $repo_folder_id", 'summary');
-                } catch (Exception $e) {
-                    $module->addLog("ERROR with repo file $fname: " . $e->getMessage(), 'error');
-                } finally {
-		    if (!empty($local) && file_exists($local)) unlink($local);
-		    if (!empty($tmpDir) && is_dir($tmpDir)) rmdir($tmpDir);
+                        $this->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
+                        $this->uploadRepo($api_token, $local, $repo_folder_id, $fname, $overwrite);
+                        $fileCount++;
+                        $successMessages[] = "Successfully uploaded $fname to folder $repo_folder_id";
+                        $this->addLog("Uploaded $fname to folder $repo_folder_id", 'summary');
+                    } catch (Exception $e) {
+                        $this->addLog("ERROR with repo file $fname: " . $e->getMessage(), 'error');
+                    } finally {
+    		    if (!empty($local) && file_exists($local)) unlink($local);
+    		    if (!empty($tmpDir) && is_dir($tmpDir)) rmdir($tmpDir);
+                    }
                 }
             }
         }
-    }
     
-    // -------------------------------------------------------
-        // UPLOAD FIELD JOBS
         // -------------------------------------------------------
-        if ($enable_upload_field) {
+            // UPLOAD FIELD JOBS
+            // -------------------------------------------------------
+            if ($enable_upload_field) {
 	
-	    $module->addLog("DEBUG: Entered upload field job block", 'detail');
+    	    $this->addLog("DEBUG: Entered upload field job block", 'detail');
 	
-	    $upload_field_sources    = $settings['upload_field_source']['value']    ?? [];
-	    $upload_fields           = $settings['upload_field']['value']           ?? [];
-	    $upload_field_events     = $settings['upload_field_event']['value']     ?? [];
-	    $upload_field_delimiters = $settings['upload_field_delimiter']['value'] ?? [];
-	    $upload_field_error_dirs = $settings['upload_field_error_dir']['value'] ?? [];
+    	    $upload_field_sources    = $settings['upload_field_source']['value']    ?? [];
+    	    $upload_fields           = $settings['upload_field']['value']           ?? [];
+    	    $upload_field_events     = $settings['upload_field_event']['value']     ?? [];
+    	    $upload_field_delimiters = $settings['upload_field_delimiter']['value'] ?? [];
+    	    $upload_field_error_dirs = $settings['upload_field_error_dir']['value'] ?? [];
 	
-	    if (!is_array($upload_field_sources))    $upload_field_sources    = [$upload_field_sources];
-	    if (!is_array($upload_fields))           $upload_fields           = [$upload_fields];
-	    if (!is_array($upload_field_events))     $upload_field_events     = [$upload_field_events];
-	    if (!is_array($upload_field_delimiters)) $upload_field_delimiters = [$upload_field_delimiters];
-	    if (!is_array($upload_field_error_dirs)) $upload_field_error_dirs = [$upload_field_error_dirs];
+    	    if (!is_array($upload_field_sources))    $upload_field_sources    = [$upload_field_sources];
+    	    if (!is_array($upload_fields))           $upload_fields           = [$upload_fields];
+    	    if (!is_array($upload_field_events))     $upload_field_events     = [$upload_field_events];
+    	    if (!is_array($upload_field_delimiters)) $upload_field_delimiters = [$upload_field_delimiters];
+    	    if (!is_array($upload_field_error_dirs)) $upload_field_error_dirs = [$upload_field_error_dirs];
 	
-	    $module->addLog("Found " . count($upload_field_sources) . " upload field job(s)", 'detail');
+    	    $this->addLog("Found " . count($upload_field_sources) . " upload field job(s)", 'detail');
 	
-	    // Detect record ID field once for all jobs
-	    try {
-	        $id_field = $module->getRecordIdField($api_token);
-	        $module->addLog("Record ID field: $id_field", 'detail');
-	    } catch (Exception $e) {
-	        $module->addLog("ERROR detecting record ID field: " . $e->getMessage(), 'error');
-	        $id_field = null;
-	    }
+    	    // Detect record ID field once for all jobs
+    	    try {
+    	        $id_field = $this->getRecordIdField($api_token);
+    	        $this->addLog("Record ID field: $id_field", 'detail');
+    	    } catch (Exception $e) {
+    	        $this->addLog("ERROR detecting record ID field: " . $e->getMessage(), 'error');
+    	        $id_field = null;
+    	    }
 	
-	    if (empty($id_field)) {
-	        $module->addLog("ERROR: Cannot proceed with upload field jobs - record ID field not detected", 'error');
-	    } else {
+    	    if (empty($id_field)) {
+    	        $this->addLog("ERROR: Cannot proceed with upload field jobs - record ID field not detected", 'error');
+    	    } else {
 	
-	        foreach ($upload_field_sources as $job_index => $upload_field_source) {
-	            if (empty($upload_field_source)) {
-	                $module->addLog("Skipping upload field job $job_index - no source specified", 'detail');
-	                continue;
-	            }
+    	        foreach ($upload_field_sources as $job_index => $upload_field_source) {
+    	            if (empty($upload_field_source)) {
+    	                $this->addLog("Skipping upload field job $job_index - no source specified", 'detail');
+    	                continue;
+    	            }
 	
-	            $field     = $upload_fields[$job_index]           ?? null;
-	            $event     = $upload_field_events[$job_index]     ?? null;
-	            $delimiter = $upload_field_delimiters[$job_index] ?? null;
-	            if ($delimiter === '') $delimiter = null;
-	            $error_dir = $upload_field_error_dirs[$job_index] ?? null;
+    	            $field     = $upload_fields[$job_index]           ?? null;
+    	            $event     = $upload_field_events[$job_index]     ?? null;
+    	            $delimiter = $upload_field_delimiters[$job_index] ?? null;
+    	            if ($delimiter === '') $delimiter = null;
+    	            $error_dir = $upload_field_error_dirs[$job_index] ?? null;
 	
-	            $module->addLog("DEBUG job $job_index: field=" . var_export($field, true) . ", error_dir=" . var_export($error_dir, true), 'detail');
-	            $module->addLog("DEBUG delimiter for job $job_index: " . var_export($delimiter, true), 'detail');
+    	            $this->addLog("DEBUG job $job_index: field=" . var_export($field, true) . ", error_dir=" . var_export($error_dir, true), 'detail');
+    	            $this->addLog("DEBUG delimiter for job $job_index: " . var_export($delimiter, true), 'detail');
 	
-	            if (empty($field)) {
-	                $module->addLog("Skipping upload field job $job_index - no field specified", 'info');
-	                continue;
-	            }
+    	            if (empty($field)) {
+    	                $this->addLog("Skipping upload field job $job_index - no field specified", 'info');
+    	                continue;
+    	            }
 	
-	            if (empty($error_dir)) {
-	                $module->addLog("Skipping upload field job $job_index - no error directory specified", 'info');
-	                continue;
-	            }
+    	            if (empty($error_dir)) {
+    	                $this->addLog("Skipping upload field job $job_index - no error directory specified", 'info');
+    	                continue;
+    	            }
 	
-	            $module->addLog("Upload field job $job_index: source='$upload_field_source', field='$field', event='$event', delimiter=" . var_export($delimiter, true), 'detail');
+    	            $this->addLog("Upload field job $job_index: source='$upload_field_source', field='$field', event='$event', delimiter=" . var_export($delimiter, true), 'detail');
 	
-	            // List all files in source directory
-	            try {
-	                $directory = trim($upload_field_source, '/');
-	                $allFiles  = $module->listFtpsDirectory($directory, $site, $port, $username, $password);
+    	            // List all files in source directory
+    	            try {
+    	                $directory = trim($upload_field_source, '/');
+    	                $allFiles  = $this->listFtpsDirectory($directory, $site, $port, $username, $password);
 	
-	                if (empty($allFiles)) {
-	                    $module->addLog("No files found in directory: $upload_field_source", 'detail');
-	                    continue;
-	                }
+    	                if (empty($allFiles)) {
+    	                    $this->addLog("No files found in directory: $upload_field_source", 'detail');
+    	                    continue;
+    	                }
 	
-	            } catch (Exception $e) {
-	                $module->addLog("ERROR listing directory $upload_field_source: " . $e->getMessage(), 'error');
-	                continue;
-	            }
+    	            } catch (Exception $e) {
+    	                $this->addLog("ERROR listing directory $upload_field_source: " . $e->getMessage(), 'error');
+    	                continue;
+    	            }
 	
-	            foreach ($allFiles as $fname) {
+    	            foreach ($allFiles as $fname) {
 	
-	                $nameWithoutExt = pathinfo($fname, PATHINFO_FILENAME);
-	                $module->addLog("DEBUG: fname=$fname, nameWithoutExt=$nameWithoutExt, delimiter=" . var_export($delimiter, true), 'detail');
+    	                $nameWithoutExt = pathinfo($fname, PATHINFO_FILENAME);
+    	                $this->addLog("DEBUG: fname=$fname, nameWithoutExt=$nameWithoutExt, delimiter=" . var_export($delimiter, true), 'detail');
 	
-	                if ($delimiter === null) {
-	                    // No delimiter configured - use entire filename stem as record ID
-	                    $record_id = $nameWithoutExt;
-	                } elseif (strpos($nameWithoutExt, $delimiter) !== false) {
-	                    // Delimiter found - parse record ID from before it
-	                    $record_id = strstr($nameWithoutExt, $delimiter, true);
-	                } else {
-	                    // Delimiter configured but not found in filename - error
-	                    $module->addLog("ERROR: Delimiter '$delimiter' not found in filename '$fname' - moving to error directory", 'error');
-	                    $module->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
-	                    continue;
-	                }
+    	                if ($delimiter === null) {
+    	                    // No delimiter configured - use entire filename stem as record ID
+    	                    $record_id = $nameWithoutExt;
+    	                } elseif (strpos($nameWithoutExt, $delimiter) !== false) {
+    	                    // Delimiter found - parse record ID from before it
+    	                    $record_id = strstr($nameWithoutExt, $delimiter, true);
+    	                } else {
+    	                    // Delimiter configured but not found in filename - error
+    	                    $this->addLog("ERROR: Delimiter '$delimiter' not found in filename '$fname' - moving to error directory", 'error');
+    	                    $this->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
+    	                    continue;
+    	                }
 	
-	                $module->addLog("DEBUG: record_id=" . var_export($record_id, true), 'info');
+    	                $this->addLog("DEBUG: record_id=" . var_export($record_id, true), 'info');
 	
-	                $remoteFile = trim($directory, '/') . '/' . $fname;
-	                $module->addLog("Processing file: $fname, parsed record ID: $record_id", 'detail');
+    	                $remoteFile = trim($directory, '/') . '/' . $fname;
+    	                $this->addLog("Processing file: $fname, parsed record ID: $record_id", 'detail');
 	
-	                $local = null;
+    	                $local = null;
 	
-	                try {
-	                    // Verify record exists
-	                    $recordExists = $module->verifyRecord($api_token, $record_id, $id_field);
+    	                try {
+    	                    // Verify record exists
+    	                    $recordExists = $this->verifyRecord($api_token, $record_id, $id_field);
 	
-	                    if (!$recordExists) {
-	                        $module->addLog("ERROR: Record $record_id not found for file $fname - moving to error directory", 'error');
-	                        $module->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
-	                        $module->addLog("Moved $fname to error directory: $error_dir", 'error');
-	                        continue;
-	                    }
+    	                    if (!$recordExists) {
+    	                        $this->addLog("ERROR: Record $record_id not found for file $fname - moving to error directory", 'error');
+    	                        $this->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
+    	                        $this->addLog("Moved $fname to error directory: $error_dir", 'error');
+    	                        continue;
+    	                    }
 	
-	                    // Download file to temp
-	                    $local = sys_get_temp_dir() . "/tmp_" . uniqid('ftps_field_', true) . "_" . $fname;
-	                    $module->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
+    	                    // Download file to temp
+    	                    $local = sys_get_temp_dir() . "/tmp_" . uniqid('ftps_field_', true) . "_" . $fname;
+    	                    $this->downloadFromFtps($remoteFile, $local, $site, $port, $username, $password);
 	
-	                    if (!file_exists($local) || filesize($local) == 0) {
-	                        $module->addLog("ERROR: File was not downloaded or is empty: $fname", 'error');
-	                        continue;
-	                    }
+    	                    if (!file_exists($local) || filesize($local) == 0) {
+    	                        $this->addLog("ERROR: File was not downloaded or is empty: $fname", 'error');
+    	                        continue;
+    	                    }
 	
-	                    // Upload to REDCap record field
-	                    $module->uploadToRecordField($api_token, $local, $record_id, $field, $event, $fname);
+    	                    // Upload to REDCap record field
+    	                    $this->uploadToRecordField($api_token, $local, $record_id, $field, $event, $fname);
 	
-	                    $successMessages[] = "Uploaded $fname to record $record_id field $field";
-	                    $module->addLog("Uploaded $fname to record $record_id field $field", 'summary');
+    	                    $successMessages[] = "Uploaded $fname to record $record_id field $field";
+    	                    $this->addLog("Uploaded $fname to record $record_id field $field", 'summary');
 	
-	                } catch (Exception $e) {
-	                    $module->addLog("ERROR processing $fname: " . $e->getMessage(), 'error');
-	                } finally {
-	                    if (!empty($local) && file_exists($local)) unlink($local);
-	                }
-	            }
-	        }
-	    }
-          }
+    	                } catch (Exception $e) {
+    	                    $this->addLog("ERROR processing $fname: " . $e->getMessage(), 'error');
+    	                } finally {
+    	                    if (!empty($local) && file_exists($local)) unlink($local);
+    	                }
+    	            }
+    	        }
+    	    }
+              }
     
-// -------------------------------------------------------
-    // ARCHIVE JOBS
     // -------------------------------------------------------
-   if ($enable_archive) {
-           $archive_sources      = $settings['archive_source']['value']      ?? [];
-           $archive_destinations = $settings['archive_destination']['value'] ?? [];
+        // ARCHIVE JOBS
+        // -------------------------------------------------------
+       if ($enable_archive) {
+               $archive_sources      = $settings['archive_source']['value']      ?? [];
+               $archive_destinations = $settings['archive_destination']['value'] ?? [];
    
-           if (!is_array($archive_sources))      $archive_sources      = [$archive_sources];
-           if (!is_array($archive_destinations)) $archive_destinations = [$archive_destinations];
+               if (!is_array($archive_sources))      $archive_sources      = [$archive_sources];
+               if (!is_array($archive_destinations)) $archive_destinations = [$archive_destinations];
    
-           $module->addLog("Found " . count($archive_sources) . " archive job(s)", 'detail');
+               $this->addLog("Found " . count($archive_sources) . " archive job(s)", 'detail');
    
-           foreach ($archive_sources as $job_index => $archive_source) {
-               if (empty($archive_source)) {
-                   $module->addLog("Skipping archive job $job_index - no source specified", 'detail');
-                   continue;
-               }
+               foreach ($archive_sources as $job_index => $archive_source) {
+                   if (empty($archive_source)) {
+                       $this->addLog("Skipping archive job $job_index - no source specified", 'detail');
+                       continue;
+                   }
    
-               $archive_destination = $archive_destinations[$job_index] ?? null;
+                   $archive_destination = $archive_destinations[$job_index] ?? null;
    
-               if (empty($archive_destination)) {
-                   $module->addLog("Skipping archive job $job_index - no destination specified", 'detail');
-                   continue;
-               }
+                   if (empty($archive_destination)) {
+                       $this->addLog("Skipping archive job $job_index - no destination specified", 'detail');
+                       continue;
+                   }
    
-               $module->addLog("Archive job $job_index: source='$archive_source', destination='$archive_destination'", 'detail');
+                   $this->addLog("Archive job $job_index: source='$archive_source', destination='$archive_destination'", 'detail');
    
-               $hasWildcard = (strpos($archive_source, '*') !== false || strpos($archive_source, '?') !== false);
+                   $hasWildcard = (strpos($archive_source, '*') !== false || strpos($archive_source, '?') !== false);
    
-               if ($hasWildcard) {
-                   $pathParts = explode('/', $archive_source);
-                   $pattern   = array_pop($pathParts);
-                   $directory = trim(implode('/', $pathParts), '/') ?: '/';
+                   if ($hasWildcard) {
+                       $pathParts = explode('/', $archive_source);
+                       $pattern   = array_pop($pathParts);
+                       $directory = trim(implode('/', $pathParts), '/') ?: '/';
    
-                   $module->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
+                       $this->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
    
-                   try {
-                       $allFiles = $module->listFtpsDirectory($directory, $site, $port, $username, $password);
+                       try {
+                           $allFiles = $this->listFtpsDirectory($directory, $site, $port, $username, $password);
    
-                       $matchingFiles = [];
-                       foreach ($allFiles as $fname) {
-                           if ($module->matchesWildcard($fname, $pattern)) {
-                               $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                           $matchingFiles = [];
+                           foreach ($allFiles as $fname) {
+                               if ($this->matchesWildcard($fname, $pattern)) {
+                                   $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                               }
                            }
+   
+                           if (empty($matchingFiles)) {
+                               $this->addLog("WARNING: No archive files matched pattern '$pattern'", 'error');
+                           }
+   
+                       } catch (Exception $e) {
+                           $this->addLog("ERROR processing archive wildcard: " . $e->getMessage(), 'error');
+                           $matchingFiles = [];
                        }
+                   } else {
+                       $matchingFiles = [$archive_source];
+                   }
    
-                       if (empty($matchingFiles)) {
-                           $module->addLog("WARNING: No archive files matched pattern '$pattern'", 'error');
+                   foreach ($matchingFiles as $remoteFile) {
+                       $fname = basename($remoteFile);
+                       try {
+                           $this->archiveOnBox(
+                               $remoteFile,
+                               $archive_destination,
+                               $site,
+                               $port,
+                               $username,
+                               $password
+                           );
+                           $successMessages[] = "Archived $fname to $archive_destination";
+                       } catch (Exception $e) {
+                           $this->addLog("ERROR archiving $fname: " . $e->getMessage(), 'error');
                        }
-   
-                   } catch (Exception $e) {
-                       $module->addLog("ERROR processing archive wildcard: " . $e->getMessage(), 'error');
-                       $matchingFiles = [];
-                   }
-               } else {
-                   $matchingFiles = [$archive_source];
-               }
-   
-               foreach ($matchingFiles as $remoteFile) {
-                   $fname = basename($remoteFile);
-                   try {
-                       $module->archiveOnBox(
-                           $remoteFile,
-                           $archive_destination,
-                           $site,
-                           $port,
-                           $username,
-                           $password
-                       );
-                       $successMessages[] = "Archived $fname to $archive_destination";
-                   } catch (Exception $e) {
-                       $module->addLog("ERROR archiving $fname: " . $e->getMessage(), 'error');
                    }
                }
-           }
-    }
+        }
     
-    // -------------------------------------------------------
-    // DELETE JOBS
-    // -------------------------------------------------------
-    if ($enable_delete) {
+        // -------------------------------------------------------
+        // DELETE JOBS
+        // -------------------------------------------------------
+        if ($enable_delete) {
 
-        $delete_files_list = $settings['delete_files']['value'] ?? [];
+            $delete_files_list = $settings['delete_files']['value'] ?? [];
 
-        if (!is_array($delete_files_list)) $delete_files_list = [$delete_files_list];
+            if (!is_array($delete_files_list)) $delete_files_list = [$delete_files_list];
 
-        $module->addLog("Found " . count($delete_files_list) . " delete job(s)", 'detail');
+            $this->addLog("Found " . count($delete_files_list) . " delete job(s)", 'detail');
 
-        foreach ($delete_files_list as $job_index => $delete_files) {
-            if (empty($delete_files)) {
-                $module->addLog("Skipping delete job $job_index - no files specified", 'delete');
-                continue;
-            }
+            foreach ($delete_files_list as $job_index => $delete_files) {
+                if (empty($delete_files)) {
+                    $this->addLog("Skipping delete job $job_index - no files specified", 'delete');
+                    continue;
+                }
 
-            $module->addLog("Delete job $job_index: files='$delete_files'", 'detail');
+                $this->addLog("Delete job $job_index: files='$delete_files'", 'detail');
 
-            $hasWildcard = (strpos($delete_files, '*') !== false || strpos($delete_files, '?') !== false);
+                $hasWildcard = (strpos($delete_files, '*') !== false || strpos($delete_files, '?') !== false);
 
-            if ($hasWildcard) {
-                $pathParts = explode('/', $delete_files);
-                $pattern   = array_pop($pathParts);
-                $directory = trim(implode('/', $pathParts), '/') ?: '/';
+                if ($hasWildcard) {
+                    $pathParts = explode('/', $delete_files);
+                    $pattern   = array_pop($pathParts);
+                    $directory = trim(implode('/', $pathParts), '/') ?: '/';
 
-                $module->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
+                    $this->addLog("Wildcard detected - Directory: $directory, Pattern: $pattern", 'detail');
 
-                try {
-                    $allFiles = $module->listFtpsDirectory($directory, $site, $port, $username, $password);
+                    try {
+                        $allFiles = $this->listFtpsDirectory($directory, $site, $port, $username, $password);
 
-                    $matchingFiles = [];
-                    foreach ($allFiles as $fname) {
-                        if ($module->matchesWildcard($fname, $pattern)) {
-                            $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                        $matchingFiles = [];
+                        foreach ($allFiles as $fname) {
+                            if ($this->matchesWildcard($fname, $pattern)) {
+                                $matchingFiles[] = trim($directory, '/') . '/' . $fname;
+                            }
                         }
-                    }
 
-                    if (empty($matchingFiles)) {
-                        $module->addLog("WARNING: No delete files matched pattern '$pattern'", 'error');
-                    }
+                        if (empty($matchingFiles)) {
+                            $this->addLog("WARNING: No delete files matched pattern '$pattern'", 'error');
+                        }
 
-                } catch (Exception $e) {
-                    $module->addLog("ERROR processing delete wildcard: " . $e->getMessage(), 'error');
-                    $matchingFiles = [];
+                    } catch (Exception $e) {
+                        $this->addLog("ERROR processing delete wildcard: " . $e->getMessage(), 'error');
+                        $matchingFiles = [];
+                    }
+                } else {
+                    $matchingFiles = [$delete_files];
                 }
-            } else {
-                $matchingFiles = [$delete_files];
-            }
 
-            foreach ($matchingFiles as $remoteFile) {
-                $fname = basename($remoteFile);
-                try {
-                    $module->deleteFromBox($remoteFile, $site, $port, $username, $password);
-                    $successMessages[] = "Deleted $fname from Box";
-                    $module->addLog("Deleted $fname from Box", 'summary');
-                } catch (Exception $e) {
-                    $module->addLog("ERROR deleting $fname: " . $e->getMessage(), 'error');
+                foreach ($matchingFiles as $remoteFile) {
+                    $fname = basename($remoteFile);
+                    try {
+                        $this->deleteFromBox($remoteFile, $site, $port, $username, $password);
+                        $successMessages[] = "Deleted $fname from Box";
+                        $this->addLog("Deleted $fname from Box", 'summary');
+                    } catch (Exception $e) {
+                        $this->addLog("ERROR deleting $fname: " . $e->getMessage(), 'error');
+                    }
                 }
             }
         }
-    }
     
 
-    $module->addLog("IMPORT COMPLETE", 'summary');
+        $this->addLog("IMPORT COMPLETE", 'summary');
 
-} catch (\Throwable $e) {
+    } catch (\Throwable $e) {
 
-    $module->addLog("FATAL ERROR: " . $e->getMessage());
+        $this->addLog("FATAL ERROR: " . $e->getMessage());
 
-} finally {
+    } finally {
 
-    $module->writeRunLog($pid);
+        $this->writeRunLog($pid);
 
-    $hasSuccesses = !empty($successMessages);
+        $hasSuccesses = !empty($successMessages);
 
-    if ($hasSuccesses || !empty($module->logMessages)) {
-        echo '<div style="margin: 20px;">';
+        if ($hasSuccesses || !empty($this->logMessages)) {
+            echo '<div style="margin: 20px;">';
 
-        if ($hasSuccesses) {
-            echo '<div style="padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724; margin-bottom: 15px;">';
-            echo '<strong>Box FTPS Import - Success!</strong><br><br>';
+            if ($hasSuccesses) {
+                echo '<div style="padding: 15px; background-color: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; color: #155724; margin-bottom: 15px;">';
+                echo '<strong>Box FTPS Import - Success!</strong><br><br>';
 
-            if ($fileCount > 0) {
-                echo $fileCount . ' file(s) were imported to the file repository<br>';
+                if ($fileCount > 0) {
+                    echo $fileCount . ' file(s) were imported to the file repository<br>';
+                }
+                if ($recordCount > 0) {
+                    echo $recordCount . ' record(s) were successfully imported<br>';
+                }
+                foreach ($successMessages as $msg) {
+                    echo htmlspecialchars($msg) . '<br>';
+                }
+
+                echo '</div>';
             }
-            if ($recordCount > 0) {
-                echo $recordCount . ' record(s) were successfully imported<br>';
-            }
-            foreach ($successMessages as $msg) {
-                echo htmlspecialchars($msg) . '<br>';
-            }
 
-            echo '</div>';
+            if (!empty($this->logMessages)) {
+                echo '<div style="padding: 15px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404;">';
+                echo '<strong>Import Log Details:</strong><br><br>';
+                echo '<div style="font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 3px;">';
+
+    foreach ($this->logMessages as $logEntry) {
+        $line = htmlspecialchars($logEntry['time'] . ' - ' . $logEntry['msg']);
+
+        if ($logEntry['level'] === 'error') {
+            echo '<span style="color: #dc3545;">' . $line . '</span><br>';
+        } elseif (strpos($logEntry['msg'], 'WARNING') !== false) {
+            echo '<span style="color: #ff9800;">' . $line . '</span><br>';
+        } elseif ($logEntry['level'] === 'summary' || strpos($logEntry['msg'], 'Downloaded') !== false || strpos($logEntry['msg'], 'Uploaded') !== false) {
+            echo '<span style="color: #28a745;">' . $line . '</span><br>';
+        } else {
+            echo $line . '<br>';
         }
+    }  // closes foreach
+                echo '</div>';
+                echo '</div>';
+            }                   // closes if (!empty($this->logMessages))
 
-        if (!empty($module->logMessages)) {
-            echo '<div style="padding: 15px; background-color: #fff3cd; border: 1px solid #ffc107; border-radius: 4px; color: #856404;">';
-            echo '<strong>Import Log Details:</strong><br><br>';
-            echo '<div style="font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; background-color: #f8f9fa; padding: 10px; border-radius: 3px;">';
-
-foreach ($module->logMessages as $logEntry) {
-    $line = htmlspecialchars($logEntry['time'] . ' - ' . $logEntry['msg']);
-
-    if ($logEntry['level'] === 'error') {
-        echo '<span style="color: #dc3545;">' . $line . '</span><br>';
-    } elseif (strpos($logEntry['msg'], 'WARNING') !== false) {
-        echo '<span style="color: #ff9800;">' . $line . '</span><br>';
-    } elseif ($logEntry['level'] === 'summary' || strpos($logEntry['msg'], 'Downloaded') !== false || strpos($logEntry['msg'], 'Uploaded') !== false) {
-        echo '<span style="color: #28a745;">' . $line . '</span><br>';
-    } else {
-        echo $line . '<br>';
+            echo '</div>';
+        }                       // closes if ($hasSuccesses || ...)
+    }                           // closes finally
     }
-}  // closes foreach
-            echo '</div>';
-            echo '</div>';
-        }                   // closes if (!empty($module->logMessages))
 
-        echo '</div>';
-    }                       // closes if ($hasSuccesses || ...)
-}                           // closes finally
+} // <-- CLASS CLOSING BRACE

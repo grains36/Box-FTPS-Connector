@@ -1,6 +1,6 @@
 {
-  "name": "Box FTPS Connector",
-  "namespace": "BoxFTPSConnector\\BoxFTPSConnectorModule",
+  "name": "Box FTPS Import",
+  "namespace": "BoxFTPSImport\\BoxFTPSImportModule",
   "authors": [
     {
       "name": "Gary Rains",
@@ -8,12 +8,8 @@
       "institution": "Duke University School of Medicine"
     }
   ],
-  "description": "Use scheduled cron or manually import files from Box into REDCap data or repo. Module can also archive or delete files on Box",
+  "description": "Imports files from Box into REDCap",
   "framework-version": 14,
-  "enable-no-auth-logging": true,
-  "hooks": [
-    "redcap_every_page_top"
-  ],
   "crons": [
     {
       "cron_name": "box_import_cron",
@@ -23,17 +19,17 @@
       "cron_max_run_time": "500"
     }
   ],
-  "no-auth-pages": [
+"no-auth-pages": [
     "boximp_now"
   ],
   "no-csrf-pages": [
-    "boximp_now"
-  ],
+     "boximp_now"
+      ],
   "links": {
     "control-center": [],
     "project": [
       {
-        "name": "BoxConnector",
+        "name": "BoxImport",
         "icon": "report",
         "url": "boximp_now.php?NOAUTH"
       }
@@ -45,64 +41,6 @@
       "name": "Enable Cron",
       "type": "checkbox",
       "required": false
-    },
-{
-      "key": "time_of_day",
-      "name": "Time of Day to Run Cron in 24-hour format, e.g., 14 for 2 PM",
-      "type": "text",
-      "required": true
-    },
-	{
-	      "key": "time_of_day2",
-	      "name": "Second Time of Day to Run Cron in 24-hour format, e.g., 18 for 6 PM",
-	      "type": "text",
-	      "required": false
-    },
-    {
-      "key": "run_on_monday",
-      "name": "Run on Monday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_tuesday",
-      "name": "Run on Tuesday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_wednesday",
-      "name": "Run on Wednesday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_thursday",
-      "name": "Run on Thursday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_friday",
-      "name": "Run on Friday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_saturday",
-      "name": "Run on Saturday",
-      "type": "checkbox"
-    },
-    {
-      "key": "run_on_sunday",
-      "name": "Run on Sunday",
-      "type": "checkbox"
-    },
-    {
-	      "key": "notification_email",
-	      "name": "Error Notification Email (optional - receives email when module errors occur)",
-	      "type": "text",
-	      "required": false
-    },
-    {
-      "key": "error_log",
-      "name": "Error Log",
-      "type": "notes"
     },
     {
       "key": "site",
@@ -128,163 +66,50 @@
       "type": "password",
       "required": true
     },
+     {
+	   "key": "api_token",
+	   "name": "API Token",
+	   "type": "password",
+	   "required": true
+        },
     {
-      "key": "api_token",
-      "name": "API Token",
-      "type": "password",
-      "required": true
-    },
-    {
-      "key": "enable_data_import",
-      "name": "Enable Data Import Jobs",
-      "type": "checkbox",
-      "required": false
-    },
-    {
-      "key": "data_import_jobs",
-      "name": "Data Import Jobs",
+      "key": "import_jobs",
+      "name": "Import Jobs",
       "type": "sub_settings",
       "repeatable": true,
       "sub_settings": [
         {
-          "key": "data_files",
-          "name": "Data File Path or Pattern (e.g. /folder/file.csv or /folder/*.csv)",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "field_map",
-          "name": "Field Map (e.g. csv_col:redcap_field, ... leave blank to use CSV headers as-is)",
+          "key": "remote_file",
+          "name": "Remote File",
           "type": "text",
           "required": false
-        }
-      ]
-    },
-    {
-      "key": "enable_repo_upload",
-      "name": "Enable File Repository Upload Jobs",
-      "type": "checkbox",
-      "required": false
-    },
-    {
-      "key": "repo_upload_jobs",
-      "name": "File Repository Upload Jobs",
-      "type": "sub_settings",
-      "repeatable": true,
-      "sub_settings": [
+        },
         {
-          "key": "repo_files",
-          "name": "Repository Files Pattern",
-          "type": "text",
-          "required": true
+          "key": "destination_type",
+          "name": "Destination Type",
+          "type": "dropdown",
+          "choices": [
+            { "value": "data", "name": "REDCap Data" },
+            { "value": "repo", "name": "File Repo" }
+          ]
         },
         {
           "key": "repo_folder_id",
           "name": "Repo Folder ID",
           "type": "text",
-          "required": true
+          "required": false
         },
         {
-          "key": "overwrite_file",
-          "name": "Overwrite files with same name",
-          "type": "checkbox",
-          "required": true
-        }
-      ]
-    },
-    {
-      "key": "enable_upload_field",
-      "name": "Enable Upload Field Jobs",
-      "type": "checkbox",
-      "required": false
-    },
-    {
-      "key": "upload_field_jobs",
-      "name": "Upload Field Jobs (upload Box files to individual REDCap record fields)",
-      "type": "sub_settings",
-      "repeatable": true,
-      "sub_settings": [
-        {
-          "key": "upload_field_source",
-          "name": "Source Directory on Box (e.g. /DRDL_Information/PDFs)",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "upload_field",
-          "name": "REDCap File Upload Field",
-          "type": "field-list",
-          "required": true
-        },
-        {
-          "key": "upload_field_event",
-          "name": "REDCap Event (longitudinal projects only, leave blank if not)",
+          "key": "event_id",
+          "name": "Event ID",
           "type": "text",
           "required": false
         },
         {
-          "key": "upload_field_delimiter",
-          "name": "Filename Delimiter (character separating record ID from rest of filename)",
-          "type": "dropdown",
-          "choices": [
-            { "value": "_", "name": "Underscore ( _ )" },
-            { "value": "-", "name": "Hyphen ( - )" },
-            { "value": ".", "name": "Period ( . )" },
-            { "value": " ", "name": "Space (   )" }
-          ],
-          "required": true
-        },
-        {
-          "key": "upload_field_error_dir",
-          "name": "Error Directory on Box for unmatched records (e.g. /DRDL_Information/Errors)",
+          "key": "field_map",
+          "name": "Field Map",
           "type": "text",
-          "required": true
-        }
-      ]
-    },
-    {
-      "key": "enable_archive",
-      "name": "Enable Archive Jobs",
-      "type": "checkbox",
-      "required": false
-    },
-    {
-      "key": "archive_jobs",
-      "name": "Box Archive Jobs (move file to archive folder on Box)",
-      "type": "sub_settings",
-      "repeatable": true,
-      "sub_settings": [
-        {
-          "key": "archive_source",
-          "name": "Source File Path or Pattern (e.g. /folder/file.csv or /folder/*.csv)",
-          "type": "text",
-          "required": true
-        },
-        {
-          "key": "archive_destination",
-          "name": "Archive Folder Path on Box (e.g. /folder/archive)",
-          "type": "text",
-          "required": true
-        }
-      ]
-    },
-     {
-      "key": "enable_delete",
-      "name": "Enable Delete Jobs",
-      "type": "checkbox",
-      "required": false
-    },
-    {
-      "key": "delete_jobs",
-      "name": "Box Delete Jobs (delete file from Box after import to REDCap)",
-      "type": "sub_settings",
-      "repeatable": true,
-      "sub_settings": [
-        {
-          "key": "delete_files",
-          "name": "File Path or Pattern to Delete (e.g. /folder/file.csv or /folder/*.csv)",
-          "type": "text",
-          "required": true
+          "required": false
         }
       ]
     }
