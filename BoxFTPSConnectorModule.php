@@ -61,8 +61,7 @@ class BoxFTPSConnectorModule extends AbstractExternalModule
  
      $hasErrors = !empty(array_filter($this->logMessages, fn($m) => $m['level'] === 'error'));
  
-     $filtered = array_filter($this->logMessages, function($m) use ($hasErrors) {
-         if ($hasErrors) return true;
+     $filtered = array_filter($this->logMessages, function($m) {
          return in_array($m['level'], ['info', 'error', 'summary']);
      });
  
@@ -111,12 +110,12 @@ function importmethod($cronAttributes) {
         $current_hour = $today->format('G');
         $current_day = $today->format('N'); // 1-7 Monday to Sunday
 
-        $this->addLog("Current hour: $current_hour, Current day: $current_day");
+        $this->addLog("Current hour: $current_hour, Current day: $current_day", 'detail');
 
         $framework = \ExternalModules\ExternalModules::getFrameworkInstance($this->PREFIX);
         $projects = $framework->getProjectsWithModuleEnabled();
 
-        $this->addLog("Found " . count($projects) . " projects with module enabled");
+        $this->addLog("Found " . count($projects) . " projects with module enabled", 'detail');
 
         if (count($projects) > 0) {
             foreach ($projects as $project_id) {
@@ -138,9 +137,9 @@ function importmethod($cronAttributes) {
                         $run_on_saturday = $this->getProjectSetting('run_on_saturday', $project_id);
                         $run_on_sunday = $this->getProjectSetting('run_on_sunday', $project_id);
         
-                        $this->addLog("Project ID: $project_id - Cron enabled");
-                        $this->addLog("Schedule - Time 1: $time_of_day, Time 2: $time_of_day2");
-                        $this->addLog("Days - Mon: $run_on_monday, Tue: $run_on_tuesday, Wed: $run_on_wednesday, Thu: $run_on_thursday, Fri: $run_on_friday, Sat: $run_on_saturday, Sun: $run_on_sunday");
+                        $this->addLog("Project ID: $project_id - Cron enabled", 'detail');
+                        $this->addLog("Schedule - Time 1: $time_of_day, Time 2: $time_of_day2", 'detail');
+                        $this->addLog("Days - Mon: $run_on_monday, Tue: $run_on_tuesday, Wed: $run_on_wednesday, Thu: $run_on_thursday, Fri: $run_on_friday, Sat: $run_on_saturday, Sun: $run_on_sunday", 'detail');
         
                         // Check if the current time matches the project settings for either run time
                         $time_matches = ($current_hour == $time_of_day || $current_hour == $time_of_day2);
@@ -155,10 +154,10 @@ function importmethod($cronAttributes) {
                         );
 
                         if ($time_matches && $day_matches) {
-                            $this->addLog("Schedule match found - executing import for project $project_id");
+                            $this->addLog("Schedule match found - executing import for project $project_id", 'summary');
                             
                             $module_cron_url = \ExternalModules\ExternalModules::getUrl($this->PREFIX, 'boximp_now.php', $project_id, true, true);
-                            $this->addLog("Calling URL: $module_cron_url");
+                            $this->addLog("Calling URL: $module_cron_url", 'detail');
 
                             $ch = curl_init();
                             curl_setopt($ch, CURLOPT_URL, $module_cron_url);
@@ -176,9 +175,9 @@ function importmethod($cronAttributes) {
                             $curl_error = curl_error($ch);
 
                             if (!empty($curl_error)) {
-                                $this->addLog("ERROR: cURL error - $curl_error");
+                                $this->addLog("ERROR: cURL error - $curl_error", 'error');
                             } else {
-                                $this->addLog("FTPS import triggered successfully for project $project_id");
+                                $this->addLog("FTPS import triggered successfully for project $project_id", 'summary');
                             }
 
                             $this->writeRunLog($project_id, true);  // ← only write on actual run
@@ -194,17 +193,17 @@ function importmethod($cronAttributes) {
                     $this->logMessages = [];
                     
                 } catch (Exception $ee) {
-                    $this->addLog("ERROR in project $project_id: " . $ee->getMessage());
+                    $this->addLog("ERROR in project $project_id: " . $ee->getMessage(), 'error');
                     $this->writeRunLog($project_id, true);  // ← errors should always be logged
                     $this->logMessages = [];
                 }
             }
         } else {
-            $this->addLog("No projects found with module enabled");
+            $this->addLog("No projects found with module enabled", 'summary');
         }
         
     } catch (Exception $e) {
-        $this->addLog("FATAL ERROR: " . $e->getMessage());
+        $this->addLog("FATAL ERROR: " . $e->getMessage(), 'error');
     }
   }
 }

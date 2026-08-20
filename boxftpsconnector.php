@@ -944,6 +944,7 @@ public function archiveOnBox($remote, $archivePath, $site, $port, $user, $pass)
     	            foreach ($allFiles as $fname) {
 	
     	                $nameWithoutExt = pathinfo($fname, PATHINFO_FILENAME);
+    	                $remoteFile = trim($directory, '/') . '/' . $fname;
     	                $this->addLog("DEBUG: fname=$fname, nameWithoutExt=$nameWithoutExt, delimiter=" . var_export($delimiter, true), 'detail');
 	
     	                if ($delimiter === null) {
@@ -955,13 +956,15 @@ public function archiveOnBox($remote, $archivePath, $site, $port, $user, $pass)
     	                } else {
     	                    // Delimiter configured but not found in filename - error
     	                    $this->addLog("ERROR: Delimiter '$delimiter' not found in filename '$fname' - moving to error directory", 'error');
-    	                    $this->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
+    	                    try {
+    	                        $this->archiveOnBox($remoteFile, $error_dir, $site, $port, $username, $password);
+    	                    } catch (Exception $e) {
+    	                        $this->addLog("ERROR moving $fname to error directory: " . $e->getMessage(), 'error');
+    	                    }
     	                    continue;
     	                }
 	
     	                $this->addLog("DEBUG: record_id=" . var_export($record_id, true), 'info');
-	
-    	                $remoteFile = trim($directory, '/') . '/' . $fname;
     	                $this->addLog("Processing file: $fname, parsed record ID: $record_id", 'detail');
 	
     	                $local = null;
