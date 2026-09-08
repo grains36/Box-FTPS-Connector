@@ -83,7 +83,7 @@ public function writeRunLog($project_id, $didRun = true)
         try {
             $ch = curl_init();
             curl_setopt_array($ch, [
-                CURLOPT_URL            => "ftps://$site:$port/$remote",
+                CURLOPT_URL            => "ftps://$site:$port/" . ltrim($remote, '/'),
                 CURLOPT_USERPWD        => "$user:$pass",
                 CURLOPT_FILE           => $fp,
                 CURLOPT_SSL_VERIFYPEER => true,
@@ -409,18 +409,26 @@ public function uploadRepo($token, $file, $folder=null, $filename=null, $overwri
 
         $out   = curl_exec($ch);
         $error = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 
         if (curl_errno($ch)) {
             throw new Exception("Repo upload error: " . $error);
         }
 
-
+        $this->addLog("File Repo API HTTP code: $httpCode", 'detail');
         $this->addLog("File Repo API Response: " . substr($out, 0, 500), 'detail');
 
         $response = json_decode($out, true);
         if (isset($response['error'])) {
             throw new Exception("REDCap API Error: " . $response['error']);
         }
+
+        if ($httpCode < 200 || $httpCode >= 300) {
+            throw new Exception("REDCap API returned HTTP $httpCode while uploading $filename - upload may not have actually succeeded.");
+        }
+        // Note: an empty response body here is not necessarily an error - some REDCap
+        // API actions intentionally return no content on success to save bandwidth,
+        // only returning content when something goes wrong.
 
         $this->addLog("Successfully uploaded file to repo: $filename in folder: $folder", 'detail');
 
@@ -576,7 +584,7 @@ public function archiveOnBox($remote, $archivePath, $site, $port, $user, $pass)
           try {
               $ch = curl_init();
               curl_setopt_array($ch, [
-                  CURLOPT_URL            => "ftps://$site:$port/$archiveFile",
+                  CURLOPT_URL            => "ftps://$site:$port/" . ltrim($archiveFile, '/'),
                   CURLOPT_USERPWD        => "$user:$pass",
                   CURLOPT_UPLOAD         => true,
                   CURLOPT_INFILE         => $fp,
